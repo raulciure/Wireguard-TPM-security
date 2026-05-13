@@ -22,8 +22,7 @@ def run(cmd, *, input_bytes=None, check=True):
     return subprocess.run(
         cmd,
         input=input_bytes,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=check,
     )
 

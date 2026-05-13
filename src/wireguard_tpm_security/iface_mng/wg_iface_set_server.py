@@ -1,4 +1,5 @@
 import os
+from subprocess import CalledProcessError
 from src.wireguard_tpm_security.wg_handshake.wg_handshake_common import TPM_WG_PEER_PUB_KEY_SEAL_NAME, WG_PEER_PUB_KEY_FILE_PATH
 from src.wireguard_tpm_security.iface_mng.wg_iface_set_common import *
 
@@ -49,15 +50,21 @@ def main():
         if not address_exists(IFACE, ADDRESS):
             run(["ip", "address", "add", ADDRESS, "dev", IFACE])
 
+        # Bring interface up
+        run(["ip", "link", "set", "up", "dev", IFACE])
+
         # Add routes for WG tunnel
         add_route_cmd = [
             "ip", "route", "add",
             PEER_SUBNET, "dev", IFACE
         ]
-        run(add_route_cmd)
-
-        # Bring interface up
-        run(["ip", "link", "set", "up", "dev", IFACE])
+        try:
+            run(add_route_cmd)
+        except CalledProcessError as e:
+            if b"RTNETLINK answers: File exists" in e.stderr:    # Route already exists => ignore
+                pass
+            else:                                               # Other type of error => raise
+                raise
 
         print(f"{IFACE} configured and up")
 
