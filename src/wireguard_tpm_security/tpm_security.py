@@ -202,6 +202,26 @@ class TpmSigner:
             return True
         
     def sign_data(self, data : bytes | str) -> tuple[bytes, str, str]:
+        """
+        Sign the received data.
+
+        Parameters
+        ----------
+        data : bytes
+            The data to be signed.
+            The hash digest of the data will be the one actually signed.
+
+        Raises
+        ------
+        RuntimeError
+            If there was an unexpected TPM error.
+        
+        Returns
+        ------
+        tuple[bytes, str, str]
+            A tuple containing (signature (DER), public key (PEM), certificate (PEM))
+        """
+
         if data == "":
             raise ValueError("data cannot be empty string")
         if isinstance(data, str):

@@ -1,6 +1,5 @@
 import socket
 import struct
-import sys
 import os
 import stat
 from Crypto.Hash import SHA256
@@ -17,8 +16,6 @@ from src.wireguard_tpm_security.auth_handshake.auth_handshake_common import TPM_
 from src.wireguard_tpm_security.auth_handshake.auth_handshake_common import PEER_PUB_KEY_FILE_NAME as PEER_AUTH_PUB_KEY_FILE_NAME
 from src.wireguard_tpm_security.auth_handshake.auth_handshake_common import TPM_PEER_PUB_KEY_SEAL_NAME as TPM_PEER_AUTH_KEY_SEAL
 
-
-SOCKET_RECV_SIZE = 4096
 
 TPM_WG_PEER_PUB_KEY_SEAL_NAME = "wg_pub_peer_seal"
 
@@ -53,7 +50,7 @@ def read_file(path : str, read_mode="rb"):
     return file.read().strip()
 
 
-def verify_RSA_signature(RSA_key : bytes, data : bytes, signature : bytes) -> bool:
+def verify_RSA_signature(RSA_key : bytes | str, data : bytes, signature : bytes) -> bool:
     verifier = pss.new(RSA.import_key(RSA_key))     # Setup signature verifier
     hash = SHA256.new(data)                         # Compute hash for given data
     try:
@@ -86,6 +83,8 @@ def wg_public_key_exchange(conn_socket : socket.socket, *, is_client : bool):
 
     wg_peer_pub_key : bytes
     wg_psk : bytes
+
+    file_peer_auth_pub_key = read_file(PEER_AUTH_PUB_KEY_FILE_PATH)
     
     if is_client is True:
         # Send wg_own_pub_key to peer
@@ -101,7 +100,6 @@ def wg_public_key_exchange(conn_socket : socket.socket, *, is_client : bool):
         print("Recieved wg_psk & signature!")
 
         # Check if local peer_auth_pub_key is authentic (with TPM), to make sure the other device is the known, authorized one
-        file_peer_auth_pub_key = read_file(PEER_AUTH_PUB_KEY_FILE_PATH)
         if TpmSealer(TPM_PEER_AUTH_KEY_SEAL).verify_with_seal(file_peer_auth_pub_key) is False:
             print("*** peer_auth_pub_key is NOT the one linked to the TPM! ***")
             return
@@ -132,7 +130,6 @@ def wg_public_key_exchange(conn_socket : socket.socket, *, is_client : bool):
         print("Recieved wg_peer_pub_key & signature!")
 
         # Check if local peer_auth_pub_key is authentic (with TPM), to make sure the other device is the known one
-        file_peer_auth_pub_key = read_file(PEER_AUTH_PUB_KEY_FILE_PATH)
         if TpmSealer(TPM_PEER_AUTH_KEY_SEAL).verify_with_seal(file_peer_auth_pub_key) is False:
             print("*** peer_auth_pub_key is NOT the one linked to the TPM! ***")
             return

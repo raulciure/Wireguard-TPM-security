@@ -41,6 +41,17 @@ def unpack(data : bytes) -> tuple[bytes, bytes, str]:
     return (rand, signature, pub_key_bytes.decode())
 
 
+def verify_RSA_signature(RSA_key : bytes | str, data : bytes, signature : bytes) -> bool:
+    verifier = pss.new(RSA.import_key(RSA_key))     # Setup signature verifier
+    hash = SHA256.new(data)                         # Compute hash for given data
+    try:
+        # Check if signature is valid
+        verifier.verify(hash, signature)   # type: ignore
+        return True
+    except ValueError:
+        return False
+
+
 def auth_key_exchange(conn_socket : socket.socket, *, is_client : bool):
     communicator = NetComm(conn_socket)
 
@@ -51,8 +62,8 @@ def auth_key_exchange(conn_socket : socket.socket, *, is_client : bool):
 
     signature, own_pub_key, _ = tpm_signer.sign_data(own_rand)
 
-    # peer_rand : bytes
-    # peer_signature : bytes
+    peer_rand : bytes
+    peer_signature : bytes
     peer_public_key : str
     
     if is_client is True:
@@ -63,50 +74,33 @@ def auth_key_exchange(conn_socket : socket.socket, *, is_client : bool):
         peer_rand, peer_signature, peer_public_key = unpack(communicator.receive())
         print("Recieved peer public key & peer signed rand!")
 
-        # Setup peer_public_key object & signature verifier
-        rsa_key = RSA.import_key(peer_public_key)
-        verifier = pss.new(rsa_key)
-
-        # Check if received signature is valid
-        peer_rand_hash = SHA256.new(peer_rand)
-        try:
-            verifier.verify(peer_rand_hash, peer_signature) # type: ignore
-            print("Received valid peer signature for peer rand!")
-        except ValueError:
+        if verify_RSA_signature(peer_public_key, peer_rand, peer_signature) is False:
             print("Received signature (for peer rand) is not valid!")
-            raise
+            return
+        print("Received valid peer signature for peer rand!")
 
         # Then, send peer_rand signed with own_key
-        peer_rand_signed_own, _, _ = tpm_signer.sign_hash(peer_rand_hash.digest())
+        peer_rand_signed_own, _, _ = tpm_signer.sign_data(peer_rand)
         communicator.send(pack(peer_rand, peer_rand_signed_own))
 
         # Receive own_rand, signed with peer_key, from peer
         own_rand_from_peer, own_rand_from_peer_signature, _ = unpack(communicator.receive())
-        own_rand_from_peer_hash = SHA256.new(own_rand_from_peer)
-        try:
-            verifier.verify(own_rand_from_peer_hash, own_rand_from_peer_signature)  # type: ignore
-            print("Received valid peer signature for own rand!")
-        except ValueError:
+        print("Recieved own rand signed with peer's key!")
+
+        if verify_RSA_signature(peer_public_key, own_rand_from_peer, own_rand_from_peer_signature) is False:
             print("Received signature (for own rand) is not valid!")
-            raise
+            return
+        print("Received valid peer signature for own rand!")
 
     else:
         # Recieve the public key from peer
         peer_rand, peer_signature, peer_public_key = unpack(communicator.receive())
         print("Recieved peer public key & peer signed rand!")
 
-        # Setup peer_public_key object & signature verifier
-        rsa_key = RSA.import_key(peer_public_key)
-        verifier = pss.new(rsa_key)
-
-        # Check if received signature is valid
-        peer_rand_hash = SHA256.new(peer_rand)
-        try:
-            verifier.verify(peer_rand_hash, peer_signature) # type: ignore
-            print("Received valid peer signature for peer rand!")
-        except ValueError:
+        if verify_RSA_signature(peer_public_key, peer_rand, peer_signature) is False:
             print("Received signature (for peer rand) is not valid!")
-            raise
+            return
+        print("Received valid peer signature for peer rand!")
 
         # Then send own tpm public key to peer
         communicator.send(pack(own_rand, signature, own_pub_key))    # Here send own public key
@@ -114,16 +108,15 @@ def auth_key_exchange(conn_socket : socket.socket, *, is_client : bool):
 
         # Receive own_rand, signed with peer_key, from peer
         own_rand_from_peer, own_rand_from_peer_signature, _ = unpack(communicator.receive())
-        own_rand_from_peer_hash = SHA256.new(own_rand_from_peer)
-        try:
-            verifier.verify(own_rand_from_peer_hash, own_rand_from_peer_signature)  # type: ignore
-            print("Received valid peer signature for own rand!")
-        except ValueError:
+        print("Recieved own rand signed with peer's key!")
+
+        if verify_RSA_signature(peer_public_key, own_rand_from_peer, own_rand_from_peer_signature) is False:
             print("Received signature (for own rand) is not valid!")
-            raise
+            return
+        print("Received valid peer signature for own rand!")
 
         # Then, send peer_rand signed with own_key
-        peer_rand_signed_own, _, _ = tpm_signer.sign_hash(peer_rand_hash.digest())
+        peer_rand_signed_own, _, _ = tpm_signer.sign_data(peer_rand)
         communicator.send(pack(peer_rand, peer_rand_signed_own))
     
     # Seal peer_public_key hash in the TPM, to prevent tampering     
