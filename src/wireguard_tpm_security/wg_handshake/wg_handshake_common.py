@@ -95,7 +95,7 @@ def wg_public_key_exchange(conn_socket : socket.socket, *, is_client : bool):
         wg_peer_pub_key, wg_peer_pub_signature = unpack(communicator.receive())
         print("Recieved wg_peer_pub_key & signature!")
 
-        # Then receive wg_peer_pub_key from peer, together with signature
+        # Then receive wg_psk from peer, together with signature
         wg_psk, wg_psk_signature = unpack(communicator.receive())
         print("Recieved wg_psk & signature!")
 
